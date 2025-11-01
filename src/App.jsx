@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { format, parseISO } from 'date-fns';
@@ -36,7 +36,7 @@ L.Marker.prototype.options.icon = defaultIcon;
 function SenseboxPopup({ box }) {
   const hasData = box.readings && box.readings.length > 0;
   const latest = hasData ? box.readings[box.readings.length - 1] : null;
-  const recent = hasData ? [...box.readings.slice(-5)].reverse() : [];
+  const history = hasData ? box.readings.slice(-20) : [];
 
   return (
     <div className="popup">
@@ -52,18 +52,37 @@ function SenseboxPopup({ box }) {
             <Metric label="Beleuchtungsstärke" value={`${latest.illu} lx`} />
             <Metric label="Licht" value={`${latest.light.toFixed(2)} V`} />
           </div>
-          <h4>Letzte 5 Werte</h4>
-          <ul className="history-list">
-            {recent.map((entry, idx) => (
-              <li key={`${box.id}-${idx}`}>
-                <span>{format(parseISO(entry.ts), 'HH:mm:ss')}</span>
-                <span>{entry.temperature.toFixed(1)} °C</span>
-                <span>{entry.humidity.toFixed(1)} %</span>
-                <span>{entry.illu} lx</span>
-                <span>{entry.light.toFixed(2)} V</span>
-              </li>
-            ))}
-          </ul>
+          <h4>Verlauf</h4>
+          <div className="chart-section">
+            <LineChart
+              data={history}
+              valueKey="temperature"
+              color="#ef4444"
+              label="Temperatur"
+              valueFormatter={(value) => `${value.toFixed(1)} °C`}
+            />
+            <LineChart
+              data={history}
+              valueKey="humidity"
+              color="#3b82f6"
+              label="Luftfeuchtigkeit"
+              valueFormatter={(value) => `${value.toFixed(1)} %`}
+            />
+            <LineChart
+              data={history}
+              valueKey="illu"
+              color="#22c55e"
+              label="Beleuchtungsstärke"
+              valueFormatter={(value) => `${value} lx`}
+            />
+            <LineChart
+              data={history}
+              valueKey="light"
+              color="#f59e0b"
+              label="Licht"
+              valueFormatter={(value) => `${value.toFixed(2)} V`}
+            />
+          </div>
         </>
       ) : (
         <p>Keine Daten verfügbar.</p>
@@ -77,6 +96,77 @@ function Metric({ label, value }) {
     <div className="metric">
       <span className="metric-label">{label}</span>
       <span className="metric-value">{value}</span>
+    </div>
+  );
+}
+
+function LineChart({ data, valueKey, color, label, valueFormatter }) {
+  if (!data || data.length === 0) {
+    return null;
+  }
+
+  const width = 280;
+  const height = 120;
+
+  const values = data.map((entry) => entry[valueKey]);
+  const timestamps = data.map((entry) => parseISO(entry.ts));
+  const minValue = Math.min(...values);
+  const maxValue = Math.max(...values);
+  const range = maxValue - minValue;
+  const gradientIdRef = useRef(
+    `gradient-${valueKey}-${Math.random().toString(36).slice(2, 9)}`
+  );
+  const gradientId = gradientIdRef.current;
+
+  const points = values
+    .map((value, index) => {
+      const x = (index / Math.max(values.length - 1, 1)) * width;
+      const normalized = range === 0 ? 0.5 : (value - minValue) / range;
+      const y = height - normalized * height;
+      return `${x},${y}`;
+    })
+    .join(' ');
+
+  const firstLabel = timestamps[0] ? format(timestamps[0], 'HH:mm') : '';
+  const lastLabel = timestamps[timestamps.length - 1]
+    ? format(timestamps[timestamps.length - 1], 'HH:mm')
+    : '';
+  const latestValue = values[values.length - 1];
+
+  return (
+    <div className="line-chart">
+      <div className="line-chart__header">
+        <span className="line-chart__label">{label}</span>
+        <span className="line-chart__value">{valueFormatter(latestValue)}</span>
+      </div>
+      <svg
+        className="line-chart__svg"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+      >
+        <defs>
+          <linearGradient id={gradientId} x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <rect width={width} height={height} fill={`url(#${gradientId})`} />
+        <polyline
+          fill="none"
+          stroke={color}
+          strokeWidth="3"
+          strokeLinejoin="round"
+          strokeLinecap="round"
+          points={points}
+        />
+      </svg>
+      <div className="line-chart__footer">
+        <span>{firstLabel}</span>
+        <span>
+          Min: {valueFormatter(minValue)} · Max: {valueFormatter(maxValue)}
+        </span>
+        <span>{lastLabel}</span>
+      </div>
     </div>
   );
 }
