@@ -21,6 +21,47 @@ const SENSEBOXES = [
   { id: 4, name: 'SenseBox 4', position: [51.2523240900498, 7.1288515117995805], file: 'sensebox4.json' }
 ];
 
+const METRIC_ANALYSIS_CONFIG = {
+  temperature: {
+    label: 'Temperatur',
+    formatter: (value) => `${value.toFixed(1)} °C`,
+    healthyRange: {
+      min: 20,
+      max: 26,
+      description: 'Komfortbereich für Aufenthaltsräume',
+      lowImpact: 'Kühle Luft kann Kreislauf und Immunsystem belasten.',
+      highImpact: 'Überhitzung steigert Hitzestress und Müdigkeit.'
+    }
+  },
+  humidity: {
+    label: 'Luftfeuchtigkeit',
+    formatter: (value) => `${value.toFixed(1)} %`,
+    healthyRange: {
+      min: 30,
+      max: 60,
+      description: 'Optimale Luftfeuchtigkeit für Gesundheit und Wohlbefinden',
+      lowImpact: 'Zu trockene Luft reizt Schleimhäute und fördert Infekte.',
+      highImpact: 'Zu feuchte Luft begünstigt Schimmel und Atemwegsbeschwerden.'
+    }
+  },
+  illu: {
+    label: 'Beleuchtungsstärke',
+    formatter: (value) => `${Math.round(value)} lx`,
+    healthyRange: {
+      min: 100,
+      max: 500,
+      description: 'Angenehme Helligkeit für längeren Aufenthalt in Innenräumen',
+      lowImpact: 'Zu wenig Licht kann zu Ermüdung und Konzentrationsproblemen führen.',
+      highImpact: 'Blendung und Kopfschmerzen sind bei sehr heller Beleuchtung möglich.'
+    }
+  },
+  light: {
+    label: 'Lichtspannung',
+    formatter: (value) => `${value.toFixed(2)} V`,
+    info: 'Indirekter Messwert, relevant für die Steuerung der Beleuchtung.'
+  }
+};
+
 const defaultIcon = L.icon({
   iconRetinaUrl,
   iconUrl,
@@ -312,34 +353,62 @@ export default function App() {
       }
     }));
 
-    const summarizeMetric = (key, label, formatter) => {
+    const summarizeMetric = (key, { label, formatter, healthyRange, info }) => {
       const latestValue = latest?.[key];
       const values = history
         .map((entry) => entry[key])
         .filter((value) => typeof value === 'number' && !Number.isNaN(value));
       const hasLatestNumber = typeof latestValue === 'number' && !Number.isNaN(latestValue);
       const latestFormatted = hasLatestNumber ? formatter(latestValue) : 'n/v';
+      let rangeText = '';
+      let statusText = '';
+
+      if (healthyRange) {
+        const { min, max, description, lowImpact, highImpact } = healthyRange;
+        rangeText = `Empfohlener Bereich ${formatter(min)} - ${formatter(max)}${description ? ` (${description})` : ''}.`;
+        if (hasLatestNumber) {
+          if (latestValue < min) {
+            statusText = `Status: zu niedrig. Hinweis: ${lowImpact}`;
+          } else if (latestValue > max) {
+            statusText = `Status: zu hoch. Hinweis: ${highImpact}`;
+          } else {
+            statusText = 'Status: im grünen Bereich.';
+          }
+        } else {
+          statusText = 'Status: nicht beurteilbar, aktueller Wert fehlt.';
+        }
+      } else if (info) {
+        rangeText = `Hinweis: ${info}`;
+      }
 
       if (!hasLatestNumber) {
-        return `${label}: keine verlässlichen aktuellen Daten.`;
+        return [`${label}: keine verlässlichen aktuellen Daten.`, rangeText, statusText]
+          .filter(Boolean)
+          .join(' ');
       }
 
       if (!values.length) {
-        return `${label}: aktuell ${latestFormatted}.`;
+        return [`${label}: aktuell ${latestFormatted}.`, rangeText, statusText]
+          .filter(Boolean)
+          .join(' ');
       }
 
       const min = Math.min(...values);
       const max = Math.max(...values);
-      return `${label}: aktuell ${latestFormatted}, Min ${formatter(min)}, Max ${formatter(max)}.`;
+      return [
+        `${label}: aktuell ${latestFormatted}, Min ${formatter(min)}, Max ${formatter(max)}.`,
+        rangeText,
+        statusText
+      ]
+        .filter(Boolean)
+        .join(' ');
     };
 
     try {
       const prompt = [
-        'Erstelle zwei extrem kurze Sätze auf Deutsch, die die aktuellen Sensordaten einordnen. Jede Kenngröße muss erwähnt werden.',
-        summarizeMetric('temperature', 'Temperatur', (value) => `${value.toFixed(1)} °C`),
-        summarizeMetric('humidity', 'Luftfeuchtigkeit', (value) => `${value.toFixed(1)} %`),
-        summarizeMetric('illu', 'Beleuchtungsstärke', (value) => `${Math.round(value)} lx`),
-        summarizeMetric('light', 'Lichtspannung', (value) => `${value.toFixed(2)} V`)
+        'Bewerte die folgenden Raumklima-Messwerte hinsichtlich der menschlichen Gesundheit.',
+        'Formuliere zwei bis drei Sätze auf Deutsch: Satz 1 fasst die Situation mit den wichtigsten Kennzahlen zusammen. Satz 2 (und optional Satz 3) nennt konkrete, leicht umsetzbare Handlungsempfehlungen, falls ein Wert außerhalb des empfohlenen Bereichs liegt. Falls alles unauffällig ist, bestätige das und erwähne, dass keine Maßnahmen nötig sind.',
+        ...Object.entries(METRIC_ANALYSIS_CONFIG).map(([key, config]) => summarizeMetric(key, config))
       ].join('\n');
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -353,7 +422,7 @@ export default function App() {
           messages: [
             {
               role: 'system',
-              content: 'Du bist ein Sensor-Datenanalyst, der sich extrem kurz hält.'
+              content: 'Du bist Expertin für gesundes Raumklima. Sprich prägnant, fachlich fundiert und fokussiere dich auf konkrete Empfehlungen für Menschen.'
             },
             {
               role: 'user',
