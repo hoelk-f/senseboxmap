@@ -40,20 +40,27 @@ function SenseboxPopup({ box }) {
 
   return (
     <div className="popup">
-      <h3>{box.name}</h3>
-      {latest ? (
-        <>
+      <div className="popup-header">
+        <h3>{box.name}</h3>
+        {latest && (
           <p className="timestamp">
             Letzte Messung: {format(parseISO(latest.ts), 'dd.MM.yyyy HH:mm:ss')} Uhr
           </p>
-          <div className="metrics-grid">
-            <Metric label="Temperatur" value={`${latest.temperature.toFixed(1)} °C`} />
-            <Metric label="Luftfeuchtigkeit" value={`${latest.humidity.toFixed(1)} %`} />
-            <Metric label="Beleuchtungsstärke" value={`${latest.illu} lx`} />
-            <Metric label="Licht" value={`${latest.light.toFixed(2)} V`} />
+        )}
+      </div>
+      {latest ? (
+        <div className="popup-content">
+          <div className="metrics-column">
+            <span className="section-label">Aktuelle Werte</span>
+            <div className="metrics-grid">
+              <Metric label="Temperatur" value={`${latest.temperature.toFixed(1)} °C`} />
+              <Metric label="Luftfeuchtigkeit" value={`${latest.humidity.toFixed(1)} %`} />
+              <Metric label="Beleuchtungsstärke" value={`${latest.illu} lx`} />
+              <Metric label="Licht" value={`${latest.light.toFixed(2)} V`} />
+            </div>
           </div>
-          <h4>Verlauf</h4>
-          <div className="chart-section">
+          <div className="chart-section" aria-label="Verlauf">
+            <span className="section-label">Verlauf</span>
             <LineChart
               data={history}
               valueKey="temperature"
@@ -83,7 +90,7 @@ function SenseboxPopup({ box }) {
               valueFormatter={(value) => `${value.toFixed(2)} V`}
             />
           </div>
-        </>
+        </div>
       ) : (
         <p>Keine Daten verfügbar.</p>
       )}
@@ -105,7 +112,7 @@ function LineChart({ data, valueKey, color, label, valueFormatter }) {
     return null;
   }
 
-  const width = 280;
+  const width = 260;
   const height = 120;
 
   const values = data.map((entry) => entry[valueKey]);
@@ -217,40 +224,34 @@ export default function App() {
 
   return (
     <div className="app">
-      <header>
-        <h1>SenseBox Monitoring – Alte Papierfabrik Wuppertal</h1>
-        <p>
-          Die Daten werden jede Minute aus dem Solid Pod geladen. Klicken Sie auf eine SenseBox, um die aktuellen Werte
-          zu sehen.
-        </p>
-        {loading && <p className="status">Lade Daten…</p>}
-        {error && <p className="status error">{error}</p>}
-      </header>
-      <main>
-        <MapContainer
-          className="map"
-          center={MAP_CENTER}
-          zoom={18}
-          scrollWheelZoom
-          bounds={mapBounds}
-          boundsOptions={{ padding: [40, 40] }}
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          {boxes.map((box) => (
-            <Marker position={box.position} key={box.id}>
-              <Tooltip direction="top" offset={[0, -30]} permanent>
-                {box.name}
-              </Tooltip>
-              <Popup closeButton={false}>
-                <SenseboxPopup box={box} />
-              </Popup>
-            </Marker>
-          ))}
-        </MapContainer>
-      </main>
+      {(loading || error) && (
+        <div className={`status-overlay${error ? ' error' : ''}`}>
+          {error || 'Lade Daten…'}
+        </div>
+      )}
+      <MapContainer
+        className="map"
+        center={MAP_CENTER}
+        zoom={18}
+        scrollWheelZoom
+        bounds={mapBounds}
+        boundsOptions={{ padding: [40, 40] }}
+      >
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>-Mitwirkende'
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+        />
+        {boxes.map((box) => (
+          <Marker position={box.position} key={box.id}>
+            <Tooltip direction="top" offset={[0, -30]} permanent>
+              {box.name}
+            </Tooltip>
+            <Popup closeButton={false}>
+              <SenseboxPopup box={box} />
+            </Popup>
+          </Marker>
+        ))}
+      </MapContainer>
     </div>
   );
 }
