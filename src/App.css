@@ -1,0 +1,136 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+header {
+  padding: 1.5rem clamp(1rem, 5vw, 3rem);
+  background: linear-gradient(135deg, #1e3a8a, #3b82f6);
+  color: #f8fafc;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.2);
+}
+
+header h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 3vw, 2.5rem);
+  font-weight: 700;
+}
+
+header p {
+  margin: 0.5rem 0 0;
+  max-width: 60ch;
+  line-height: 1.5;
+}
+
+.status {
+  margin-top: 0.75rem;
+  display: inline-block;
+  padding: 0.35rem 0.75rem;
+  border-radius: 999px;
+  background-color: rgba(248, 250, 252, 0.2);
+  color: #f8fafc;
+  font-weight: 600;
+}
+
+.status.error {
+  background-color: rgba(248, 113, 113, 0.2);
+}
+
+main {
+  flex: 1;
+  padding: clamp(1rem, 4vw, 2rem);
+}
+
+.map {
+  width: 100%;
+  min-height: 75vh;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 15px 45px rgba(15, 23, 42, 0.2);
+}
+
+.popup {
+  min-width: 260px;
+  max-width: 320px;
+  color: #0f172a;
+}
+
+.popup h3 {
+  margin-top: 0;
+  margin-bottom: 0.5rem;
+  font-size: 1.1rem;
+}
+
+.popup h4 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.95rem;
+}
+
+.timestamp {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #475569;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+}
+
+.metric {
+  background-color: #eff6ff;
+  padding: 0.65rem;
+  border-radius: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  border: 1px solid #bfdbfe;
+}
+
+.metric-label {
+  font-size: 0.75rem;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.metric-value {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+.history-list li {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 0.35rem;
+  padding: 0.4rem 0.5rem;
+  background-color: #f8fafc;
+  border-radius: 0.5rem;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+}
+
+.history-list li span:first-child {
+  font-weight: 600;
+}
+
+@media (max-width: 600px) {
+  .metrics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .history-list li {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: 0.25rem;
+  }
+}
