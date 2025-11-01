@@ -244,7 +244,7 @@ export default function App() {
         {boxes.map((box) => (
           <Marker position={box.position} key={box.id}>
             <Tooltip direction="top" offset={[0, -30]} permanent>
-              {box.name}
+              {box.id}
             </Tooltip>
             <Popup closeButton={false}>
               <SenseboxPopup box={box} />
