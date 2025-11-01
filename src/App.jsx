@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, Popup, TileLayer, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import { format, parseISO } from 'date-fns';
@@ -33,7 +33,7 @@ const defaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = defaultIcon;
 
-function SenseboxPopup({ box }) {
+function SenseboxPopup({ box, analysis, onRetryAnalysis }) {
   const hasData = box.readings && box.readings.length > 0;
   const latest = hasData ? box.readings[box.readings.length - 1] : null;
   const history = hasData ? box.readings.slice(-20) : [];
@@ -49,50 +49,84 @@ function SenseboxPopup({ box }) {
         )}
       </div>
       {latest ? (
-        <div className="popup-content">
-          <div className="metrics-column">
-            <span className="section-label">Aktuelle Werte</span>
-            <div className="metrics-grid">
-              <Metric label="Temperatur" value={`${latest.temperature.toFixed(1)} °C`} />
-              <Metric label="Luftfeuchtigkeit" value={`${latest.humidity.toFixed(1)} %`} />
-              <Metric label="Beleuchtungsstärke" value={`${latest.illu} lx`} />
-              <Metric label="Licht" value={`${latest.light.toFixed(2)} V`} />
+        <>
+          <div className="popup-content">
+            <div className="metrics-column">
+              <span className="section-label">Aktuelle Werte</span>
+              <div className="metrics-grid">
+                <Metric label="Temperatur" value={`${latest.temperature.toFixed(1)} °C`} />
+                <Metric label="Luftfeuchtigkeit" value={`${latest.humidity.toFixed(1)} %`} />
+                <Metric label="Beleuchtungsstärke" value={`${latest.illu} lx`} />
+                <Metric label="Licht" value={`${latest.light.toFixed(2)} V`} />
+              </div>
+            </div>
+            <div className="chart-section" aria-label="Verlauf">
+              <span className="section-label">Verlauf</span>
+              <LineChart
+                data={history}
+                valueKey="temperature"
+                color="#ef4444"
+                label="Temperatur"
+                valueFormatter={(value) => `${value.toFixed(1)} °C`}
+              />
+              <LineChart
+                data={history}
+                valueKey="humidity"
+                color="#3b82f6"
+                label="Luftfeuchtigkeit"
+                valueFormatter={(value) => `${value.toFixed(1)} %`}
+              />
+              <LineChart
+                data={history}
+                valueKey="illu"
+                color="#22c55e"
+                label="Beleuchtungsstärke"
+                valueFormatter={(value) => `${value} lx`}
+              />
+              <LineChart
+                data={history}
+                valueKey="light"
+                color="#f59e0b"
+                label="Licht"
+                valueFormatter={(value) => `${value.toFixed(2)} V`}
+              />
             </div>
           </div>
-          <div className="chart-section" aria-label="Verlauf">
-            <span className="section-label">Verlauf</span>
-            <LineChart
-              data={history}
-              valueKey="temperature"
-              color="#ef4444"
-              label="Temperatur"
-              valueFormatter={(value) => `${value.toFixed(1)} °C`}
-            />
-            <LineChart
-              data={history}
-              valueKey="humidity"
-              color="#3b82f6"
-              label="Luftfeuchtigkeit"
-              valueFormatter={(value) => `${value.toFixed(1)} %`}
-            />
-            <LineChart
-              data={history}
-              valueKey="illu"
-              color="#22c55e"
-              label="Beleuchtungsstärke"
-              valueFormatter={(value) => `${value} lx`}
-            />
-            <LineChart
-              data={history}
-              valueKey="light"
-              color="#f59e0b"
-              label="Licht"
-              valueFormatter={(value) => `${value.toFixed(2)} V`}
-            />
-          </div>
-        </div>
+          <AnalysisSection
+            analysis={analysis}
+            onRetryAnalysis={onRetryAnalysis}
+          />
+        </>
       ) : (
         <p>Keine Daten verfügbar.</p>
+      )}
+    </div>
+  );
+}
+
+function AnalysisSection({ analysis, onRetryAnalysis }) {
+  if (!analysis || analysis.status === 'idle') {
+    return null;
+  }
+
+  return (
+    <div className="analysis-section">
+      <div className="analysis-header">
+        <span className="section-label">LLM Analyse</span>
+        {analysis.status === 'loading' && (
+          <span className="analysis-status">Wird geladen…</span>
+        )}
+        {analysis.status === 'error' && (
+          <button type="button" className="analysis-retry" onClick={onRetryAnalysis}>
+            Erneut versuchen
+          </button>
+        )}
+      </div>
+      {analysis.status === 'success' && analysis.text && (
+        <p className="analysis-text">{analysis.text}</p>
+      )}
+      {analysis.status === 'error' && analysis.error && (
+        <p className="analysis-text analysis-text--error">{analysis.error}</p>
       )}
     </div>
   );
@@ -182,6 +216,7 @@ export default function App() {
   const [boxes, setBoxes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [analysisByBox, setAnalysisByBox] = useState({});
 
   useEffect(() => {
     let isMounted = true;
@@ -200,6 +235,17 @@ export default function App() {
         );
         if (!isMounted) return;
         setBoxes(results);
+        setAnalysisByBox((prev) => {
+          const updated = { ...prev };
+          results.forEach((box) => {
+            const latest = box.readings?.[box.readings.length - 1];
+            const prevEntry = prev[box.id];
+            if (prevEntry?.latestTimestamp && latest?.ts !== prevEntry.latestTimestamp) {
+              updated[box.id] = { status: 'idle' };
+            }
+          });
+          return updated;
+        });
         setError(null);
         setLoading(false);
       } catch (err) {
@@ -222,6 +268,134 @@ export default function App() {
     return L.latLngBounds(positions);
   }, [boxes]);
 
+  const triggerAnalysis = async (box) => {
+    const apiKey = import.meta.env.VITE_OPENAI_API_KEY;
+    const latest = box.readings?.[box.readings.length - 1];
+    const history = box.readings?.slice(-20) ?? [];
+
+    if (!latest) {
+      setAnalysisByBox((prev) => ({
+        ...prev,
+        [box.id]: {
+          status: 'error',
+          error: 'Keine Messwerte für die Analyse vorhanden.'
+        }
+      }));
+      return;
+    }
+
+    if (!apiKey) {
+      setAnalysisByBox((prev) => ({
+        ...prev,
+        [box.id]: {
+          status: 'error',
+          error: 'Kein OpenAI API Key konfiguriert.'
+        }
+      }));
+      return;
+    }
+
+    const existing = analysisByBox[box.id];
+    if (existing?.status === 'loading') {
+      return;
+    }
+
+    if (existing?.status === 'success' && existing.latestTimestamp === latest.ts) {
+      return;
+    }
+
+    setAnalysisByBox((prev) => ({
+      ...prev,
+      [box.id]: {
+        status: 'loading',
+        latestTimestamp: latest.ts
+      }
+    }));
+
+    const summarizeMetric = (key, label, formatter) => {
+      const latestValue = latest?.[key];
+      const values = history
+        .map((entry) => entry[key])
+        .filter((value) => typeof value === 'number' && !Number.isNaN(value));
+      const hasLatestNumber = typeof latestValue === 'number' && !Number.isNaN(latestValue);
+      const latestFormatted = hasLatestNumber ? formatter(latestValue) : 'n/v';
+
+      if (!hasLatestNumber) {
+        return `${label}: keine verlässlichen aktuellen Daten.`;
+      }
+
+      if (!values.length) {
+        return `${label}: aktuell ${latestFormatted}.`;
+      }
+
+      const min = Math.min(...values);
+      const max = Math.max(...values);
+      return `${label}: aktuell ${latestFormatted}, Min ${formatter(min)}, Max ${formatter(max)}.`;
+    };
+
+    try {
+      const prompt = [
+        'Erstelle zwei extrem kurze Sätze auf Deutsch, die die aktuellen Sensordaten einordnen. Jede Kenngröße muss erwähnt werden.',
+        summarizeMetric('temperature', 'Temperatur', (value) => `${value.toFixed(1)} °C`),
+        summarizeMetric('humidity', 'Luftfeuchtigkeit', (value) => `${value.toFixed(1)} %`),
+        summarizeMetric('illu', 'Beleuchtungsstärke', (value) => `${Math.round(value)} lx`),
+        summarizeMetric('light', 'Lichtspannung', (value) => `${value.toFixed(2)} V`)
+      ].join('\n');
+
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini',
+          messages: [
+            {
+              role: 'system',
+              content: 'Du bist ein Sensor-Datenanalyst, der sich extrem kurz hält.'
+            },
+            {
+              role: 'user',
+              content: prompt
+            }
+          ],
+          max_tokens: 120,
+          temperature: 0.6
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('Antwort vom LLM fehlgeschlagen.');
+      }
+
+      const data = await response.json();
+      const text = data.choices?.[0]?.message?.content?.trim();
+
+      if (!text) {
+        throw new Error('Keine Analyse erhalten.');
+      }
+
+      setAnalysisByBox((prev) => ({
+        ...prev,
+        [box.id]: {
+          status: 'success',
+          text,
+          latestTimestamp: latest.ts
+        }
+      }));
+    } catch (err) {
+      setAnalysisByBox((prev) => ({
+        ...prev,
+        [box.id]: {
+          status: 'error',
+          error: err.message || 'Unbekannter Fehler bei der Analyse.',
+          latestTimestamp: latest.ts
+        }
+      }));
+    }
+  };
+
   return (
     <div className="app">
       {(loading || error) && (
@@ -242,12 +416,20 @@ export default function App() {
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
         {boxes.map((box) => (
-          <Marker position={box.position} key={box.id}>
+          <Marker
+            position={box.position}
+            key={box.id}
+            eventHandlers={{ click: () => triggerAnalysis(box) }}
+          >
             <Tooltip direction="top" offset={[0, -30]} permanent>
               {box.id}
             </Tooltip>
             <Popup closeButton={false}>
-              <SenseboxPopup box={box} />
+              <SenseboxPopup
+                box={box}
+                analysis={analysisByBox[box.id]}
+                onRetryAnalysis={() => triggerAnalysis(box)}
+              />
             </Popup>
           </Marker>
         ))}
