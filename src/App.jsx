@@ -9,16 +9,16 @@ import iconRetinaUrl from 'leaflet/dist/images/marker-icon-2x.png';
 import iconUrl from 'leaflet/dist/images/marker-icon.png';
 import shadowUrl from 'leaflet/dist/images/marker-shadow.png';
 
-const MAP_CENTER = [51.2596, 7.1602];
+const MAP_CENTER = [51.2524, 7.1287];
 const BASE_URL = 'https://tmdt-solid-community-server.de/iotworkshop/public';
 const REFRESH_INTERVAL = 60_000;
 
 const SENSEBOXES = [
-  { id: 0, name: 'SenseBox 0', position: [51.2599, 7.1599], file: 'sensebox0.json' },
-  { id: 1, name: 'SenseBox 1', position: [51.2593, 7.1604], file: 'sensebox1.json' },
-  { id: 2, name: 'SenseBox 2', position: [51.2596, 7.1609], file: 'sensebox2.json' },
-  { id: 3, name: 'SenseBox 3', position: [51.2601, 7.1606], file: 'sensebox3.json' },
-  { id: 4, name: 'SenseBox 4', position: [51.2594, 7.1597], file: 'sensebox4.json' }
+  { id: 0, name: 'SenseBox 0', position: [51.25249146683472, 7.128714956019335], file: 'sensebox0.json' },
+  { id: 1, name: 'SenseBox 1', position: [51.25234545733288, 7.128517708781204], file: 'sensebox1.json' },
+  { id: 2, name: 'SenseBox 2', position: [51.25247128668728, 7.128386842825138], file: 'sensebox2.json' },
+  { id: 3, name: 'SenseBox 3', position: [51.252534201235335, 7.1285670205907365], file: 'sensebox3.json' },
+  { id: 4, name: 'SenseBox 4', position: [51.2523240900498, 7.1288515117995805], file: 'sensebox4.json' }
 ];
 
 const defaultIcon = L.icon({
